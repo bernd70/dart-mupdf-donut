@@ -155,6 +155,7 @@ class TextPage {
     final linesList = <List<_TextRun>>[];
     var curLine = <_TextRun>[runs.first];
     double lastY = runs.first.y;
+    // ignore: unused_local_variable
     double lastX = runs.first.x + runs.first.approxWidth;
 
     for (int i = 1; i < runs.length; i++) {
@@ -168,7 +169,7 @@ class TextPage {
         curLine.add(run);
       }
       lastY = run.y;
-      lastX = run.x + run.approxWidth;
+      lastX = run.x + run.approxWidth; // ignore: unused_local_variable
     }
     if (curLine.isNotEmpty) linesList.add(curLine);
 
