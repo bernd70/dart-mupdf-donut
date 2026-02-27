@@ -17,3 +17,9 @@ coverage/
 
 # Generated
 *.g.dart
+
+# Model weights (large files, download separately)
+modeldonut/
+
+# Python conversion scripts
+tools/

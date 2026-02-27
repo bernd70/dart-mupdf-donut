@@ -15,6 +15,7 @@
 library;
 
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import '../tensor/tensor.dart';
 import '../nn/layers.dart';
@@ -263,6 +264,7 @@ class BartDecoder {
   late Embedding embedTokens;
   late Embedding embedPositions;
   late LayerNorm layerNorm;
+  late LayerNorm layernormEmbedding;
   late Linear lmHead;
   late List<BartDecoderLayer> layers;
 
@@ -275,7 +277,7 @@ class BartDecoder {
   BartDecoder({
     this.decoderLayers = 4,
     this.maxPositionEmbeddings = 1536,
-    this.vocabSize = 57522,
+    this.vocabSize = 57525,
     this.embedDim = 1024,
     this.ffnDim = 4096,
     this.numHeads = 16,
@@ -284,6 +286,7 @@ class BartDecoder {
     // +2 for BART's position embedding offset
     embedPositions = Embedding(maxPositionEmbeddings + 2, embedDim);
     layerNorm = LayerNorm(embedDim);
+    layernormEmbedding = LayerNorm(embedDim);
     lmHead = Linear(embedDim, vocabSize, useBias: false);
     embedScale = math.sqrt(embedDim.toDouble());
 
@@ -295,6 +298,25 @@ class BartDecoder {
         numHeads: numHeads,
       ),
     );
+  }
+
+  /// Resize vocabulary to [newVocabSize], preserving pretrained weights.
+  ///
+  /// Call this after loading pretrained weights and adding special tokens
+  /// so that embedTokens and lmHead can handle the expanded vocabulary.
+  void resizeVocab(int newVocabSize) {
+    embedTokens.resize(newVocabSize);
+    // Rebuild lmHead with new output dimension, copying existing rows
+    final oldLmHead = lmHead;
+    lmHead = Linear(embedDim, newVocabSize, useBias: false);
+    final copyRows = newVocabSize < oldLmHead.outFeatures
+        ? newVocabSize
+        : oldLmHead.outFeatures;
+    final newData = Float32List(newVocabSize * embedDim);
+    for (int i = 0; i < copyRows * embedDim; i++) {
+      newData[i] = oldLmHead.weight.data[i];
+    }
+    lmHead.weight = Tensor(newData, [newVocabSize, embedDim]);
   }
 
   /// Forward pass through the decoder.
@@ -321,6 +343,9 @@ class BartDecoder {
     final posIds = List.generate(seqLen, (i) => pastLength + i + 2);
     final posEmbeds = embedPositions.forward(posIds);
     hidden = hidden + posEmbeds;
+
+    // Apply layernorm after embedding (mBART-specific)
+    hidden = layernormEmbedding.forward(hidden.reshape([seqLen, embedDim]));
 
     // Reshape to (1, seqLen, embedDim) for batch processing
     hidden = hidden.unsqueeze(0);

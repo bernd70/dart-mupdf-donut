@@ -115,7 +115,7 @@ class LayerNorm {
 ///
 /// Maps integer token IDs to dense vectors.
 class Embedding {
-  final int numEmbeddings;
+  int numEmbeddings;
   final int embeddingDim;
   int? paddingIdx;
 
@@ -124,6 +124,20 @@ class Embedding {
 
   Embedding(this.numEmbeddings, this.embeddingDim, {this.paddingIdx}) {
     weight = Tensor.zeros([numEmbeddings, embeddingDim]);
+  }
+
+  /// Resize the embedding to accommodate [newSize] entries.
+  ///
+  /// Preserves existing embeddings and zero-initializes new rows.
+  void resize(int newSize) {
+    if (newSize == numEmbeddings) return;
+    final newWeight = Float32List(newSize * embeddingDim);
+    final copyCount = newSize < numEmbeddings ? newSize : numEmbeddings;
+    for (int i = 0; i < copyCount * embeddingDim; i++) {
+      newWeight[i] = weight.data[i];
+    }
+    weight = Tensor(newWeight, [newSize, embeddingDim]);
+    numEmbeddings = newSize;
   }
 
   /// Forward pass: lookup embeddings for given token IDs.

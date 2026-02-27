@@ -363,7 +363,7 @@ void main() {
       expect(config.decoderLayer, 4);
       expect(config.encoderEmbedDim, 128);
       expect(config.decoderEmbedDim, 1024);
-      expect(config.vocabSize, 57522);
+      expect(config.vocabSize, 57525);
     });
 
     test('small config', () {
@@ -829,34 +829,34 @@ void main() {
       // Pure red pixel (255, 0, 0)
       final pixels = <int>[255, 0, 0];
       final tensor = DonutImageUtils.fromPixels(pixels, 1, 1);
-      // R channel: (1.0 - 0.485) / 0.229 ≈ 2.249
-      expect(tensor.data[0], closeTo((1.0 - 0.485) / 0.229, 0.01));
-      // G channel: (0.0 - 0.456) / 0.224 ≈ -2.036
-      expect(tensor.data[1], closeTo((0.0 - 0.456) / 0.224, 0.01));
+      // R channel: (1.0 - 0.5) / 0.5 = 1.0
+      expect(tensor.data[0], closeTo((1.0 - 0.5) / 0.5, 0.01));
+      // G channel: (0.0 - 0.5) / 0.5 = -1.0
+      expect(tensor.data[1], closeTo((0.0 - 0.5) / 0.5, 0.01));
     });
 
     test('fromPixels white pixel normalization', () {
       // Pure white pixel (255, 255, 255)
       final pixels = <int>[255, 255, 255];
       final tensor = DonutImageUtils.fromPixels(pixels, 1, 1);
-      // R: (1.0 - 0.485) / 0.229 ≈ 2.249
-      expect(tensor.data[0], closeTo((1.0 - 0.485) / 0.229, 0.01));
-      // G: (1.0 - 0.456) / 0.224 ≈ 2.429
-      expect(tensor.data[1], closeTo((1.0 - 0.456) / 0.224, 0.01));
-      // B: (1.0 - 0.406) / 0.225 ≈ 2.640
-      expect(tensor.data[2], closeTo((1.0 - 0.406) / 0.225, 0.01));
+      // R: (1.0 - 0.5) / 0.5 = 1.0
+      expect(tensor.data[0], closeTo((1.0 - 0.5) / 0.5, 0.01));
+      // G: (1.0 - 0.5) / 0.5 = 1.0
+      expect(tensor.data[1], closeTo((1.0 - 0.5) / 0.5, 0.01));
+      // B: (1.0 - 0.5) / 0.5 = 1.0
+      expect(tensor.data[2], closeTo((1.0 - 0.5) / 0.5, 0.01));
     });
 
     test('fromPixels black pixel normalization', () {
       // Pure black pixel (0, 0, 0)
       final pixels = <int>[0, 0, 0];
       final tensor = DonutImageUtils.fromPixels(pixels, 1, 1);
-      // R: (0.0 - 0.485) / 0.229 ≈ -2.118
-      expect(tensor.data[0], closeTo(-0.485 / 0.229, 0.01));
-      // G: (0.0 - 0.456) / 0.224 ≈ -2.036
-      expect(tensor.data[1], closeTo(-0.456 / 0.224, 0.01));
-      // B: (0.0 - 0.406) / 0.225 ≈ -1.804
-      expect(tensor.data[2], closeTo(-0.406 / 0.225, 0.01));
+      // R: (0.0 - 0.5) / 0.5 = -1.0
+      expect(tensor.data[0], closeTo(-0.5 / 0.5, 0.01));
+      // G: (0.0 - 0.5) / 0.5 = -1.0
+      expect(tensor.data[1], closeTo(-0.5 / 0.5, 0.01));
+      // B: (0.0 - 0.5) / 0.5 = -1.0
+      expect(tensor.data[2], closeTo(-0.5 / 0.5, 0.01));
     });
 
     test('fromPixels NCHW layout', () {
@@ -874,8 +874,8 @@ void main() {
       // Pixel (0,0)=red has R=255→1.0, pixel (0,1)=green has R=0→0.0
       final rTopLeft = tensor.data[0 * 4 + 0]; // R channel, y=0, x=0
       final rTopRight = tensor.data[0 * 4 + 1]; // R channel, y=0, x=1
-      expect(rTopLeft, closeTo((1.0 - 0.485) / 0.229, 0.01)); // red → high R
-      expect(rTopRight, closeTo((0.0 - 0.485) / 0.229, 0.01)); // green → low R
+      expect(rTopLeft, closeTo((1.0 - 0.5) / 0.5, 0.01)); // red → high R
+      expect(rTopRight, closeTo((0.0 - 0.5) / 0.5, 0.01)); // green → low R
     });
 
     test('describePipeline output', () {
@@ -907,12 +907,12 @@ void main() {
       // Create normalized tensor where all values are 0 (mean pixel)
       final tensor = Tensor.zeros([1, 3, 2, 2]);
       final image = DonutImageUtils.tensorToImage(tensor);
-      // When normalized value = 0: pixel = 0 * std + mean = mean
-      // R: 0.485*255 ≈ 124, G: 0.456*255 ≈ 116, B: 0.406*255 ≈ 104
+      // When normalized value = 0: pixel = 0 * 0.5 + 0.5 = 0.5
+      // R: 0.5*255 = 128, G: 0.5*255 = 128, B: 0.5*255 = 128
       final pix = image.getPixel(0, 0);
-      expect(pix.r.toInt(), closeTo(124, 2));
-      expect(pix.g.toInt(), closeTo(116, 2));
-      expect(pix.b.toInt(), closeTo(104, 2));
+      expect(pix.r.toInt(), closeTo(128, 2));
+      expect(pix.g.toInt(), closeTo(128, 2));
+      expect(pix.b.toInt(), closeTo(128, 2));
     });
   });
 
@@ -974,7 +974,7 @@ void main() {
       }
     });
 
-    test('pixel value range after ImageNet normalization', () {
+    test('pixel value range after Donut normalization', () {
       final config = DonutConfig(
         inputSize: [128, 96],
         alignLongAxis: true,
@@ -995,7 +995,7 @@ void main() {
         final tensor = DonutImageUtils.preprocessBytes(bytes, config);
         final name = path.split('/').last;
 
-        // After ImageNet normalization, values should be roughly in [-3, 3]
+        // After Donut normalization (mean/std=0.5), values are in [-1, 1]
         double minVal = double.infinity;
         double maxVal = double.negativeInfinity;
         double sum = 0;

@@ -114,7 +114,7 @@ class DonutWeightLoader {
 
     // Swin layers
     final swinLayerMatch = RegExp(
-      r'encoder\.(?:model\.)?layers\.(\d+)\.(.+)',
+      r'encoder\.(?:model\.)?(?:encoder\.)?layers\.(\d+)\.(.+)',
     ).firstMatch(name);
     if (swinLayerMatch != null) {
       final layerIdx = int.parse(swinLayerMatch.group(1)!);
@@ -166,6 +166,18 @@ class DonutWeightLoader {
     if (name == 'decoder.model.decoder.layer_norm.bias' ||
         name == 'decoder.layer_norm.bias') {
       decoder.layerNorm.bias = tensor;
+      return true;
+    }
+
+    // Decoder layernorm embedding (mBART-specific)
+    if (name == 'decoder.model.decoder.layernorm_embedding.weight' ||
+        name == 'decoder.layernorm_embedding.weight') {
+      decoder.layernormEmbedding.weight = tensor;
+      return true;
+    }
+    if (name == 'decoder.model.decoder.layernorm_embedding.bias' ||
+        name == 'decoder.layernorm_embedding.bias') {
+      decoder.layernormEmbedding.bias = tensor;
       return true;
     }
 
@@ -445,8 +457,8 @@ class DonutWeightLoader {
 
     switch (dtype) {
       case 'F32':
-        final count = (end - start) ~/ 4;
-        return Float32List.sublistView(slice, 0, count);
+        // sublistView interprets args as byte offsets, so use the full slice
+        return Float32List.sublistView(slice);
 
       case 'F16':
         // Convert float16 to float32

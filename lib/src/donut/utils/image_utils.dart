@@ -3,9 +3,9 @@
 /// Handles all image preparation needed before feeding to the Swin Transformer
 /// encoder: decoding, resizing, normalization, and tensor conversion.
 ///
-/// Uses ImageNet normalization (same as original Donut model):
-///   mean = [0.485, 0.456, 0.406]
-///   std  = [0.229, 0.224, 0.225]
+/// Uses Donut normalization (mean=0.5, std=0.5 per channel):
+///   mean = [0.5, 0.5, 0.5]
+///   std  = [0.5, 0.5, 0.5]
 library;
 
 import 'dart:math' as math;
@@ -26,14 +26,14 @@ import '../donut_config.dart';
 /// 2. Optionally rotate if height > width (align long axis)
 /// 3. Resize to target size while maintaining aspect ratio
 /// 4. Pad to exact target dimensions with white pixels
-/// 5. Normalize with ImageNet mean/std
+/// 5. Normalize with mean/std = [0.5, 0.5, 0.5]
 /// 6. Convert to tensor (batch, channels, height, width)
 class DonutImageUtils {
-  /// ImageNet normalization mean (RGB).
-  static const List<double> mean = [0.485, 0.456, 0.406];
+  /// Donut normalization mean (RGB) — matches HuggingFace DonutFeatureExtractor.
+  static const List<double> mean = [0.5, 0.5, 0.5];
 
-  /// ImageNet normalization std (RGB).
-  static const List<double> std = [0.229, 0.224, 0.225];
+  /// Donut normalization std (RGB) — matches HuggingFace DonutFeatureExtractor.
+  static const List<double> std = [0.5, 0.5, 0.5];
 
   /// Preprocess raw image bytes for Donut inference.
   ///
@@ -138,7 +138,7 @@ class DonutImageUtils {
   /// Convert an image to a normalized NCHW tensor.
   ///
   /// Returns a tensor of shape (1, 3, height, width) with pixel values
-  /// normalized using ImageNet mean and std.
+  /// normalized using Donut mean/std (0.5, 0.5).
   static Tensor _imageToTensor(img.Image image) {
     final h = image.height;
     final w = image.width;
@@ -153,7 +153,7 @@ class DonutImageUtils {
         final g = pixel.gNormalized;
         final b = pixel.bNormalized;
 
-        // Apply ImageNet normalization: (value - mean) / std
+        // Apply Donut normalization: (value - 0.5) / 0.5 = value * 2 - 1
         final idx = y * w + x;
         data[0 * h * w + idx] = ((r - mean[0]) / std[0]); // R channel
         data[1 * h * w + idx] = ((g - mean[1]) / std[1]); // G channel

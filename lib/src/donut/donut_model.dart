@@ -144,6 +144,7 @@ class DonutModel {
       _randomInitTensors(obj.embedTokens, rng, scale);
       _randomInitTensors(obj.embedPositions, rng, scale);
       _randomInitTensors(obj.layerNorm, rng, scale);
+      _randomInitTensors(obj.layernormEmbedding, rng, scale);
       _randomInitTensors(obj.lmHead, rng, scale);
       for (final layer in obj.layers) {
         _randomInitTensors(layer, rng, scale);

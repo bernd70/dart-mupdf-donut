@@ -1,3 +1,16 @@
+## 1.1.0
+
+### Donut Model — Real Pretrained Weight Support
+
+- **Real receipt extraction**: Example loads pretrained `donut-base-finetuned-cord-v2` weights and runs actual inference on receipt images
+- **Weight converter**: Added `tools/convert_weights.py` to convert HuggingFace PyTorch models to safetensors format compatible with Dart loader
+- **Tokenizer fix**: `DonutTokenizer.fromJson` now supports both BPE (`vocab` as Map) and Unigram (`vocab` as List) HuggingFace formats
+- **Donut normalization**: Fixed image preprocessing to use correct mean/std = [0.5, 0.5, 0.5] (was incorrectly using ImageNet values)
+- **mBART layernorm**: Added `layernorm_embedding` layer to BartDecoder (required by mBART architecture)
+- **Weight loader**: Fixed encoder layer regex to match converted safetensors naming, added `layernorm_embedding` weight loading
+- **Config**: Updated default `vocabSize` to 57525, `alignLongAxis` to true
+- **Example**: Rewrote `example.dart` to demonstrate real pretrained model inference on receipt images
+
 ## 1.0.0
 
 Initial release of **dart_mupdf_donut** — a pure Dart PDF library with

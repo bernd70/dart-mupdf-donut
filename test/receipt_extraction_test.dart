@@ -366,7 +366,7 @@ void main() {
       }
     });
 
-    test('pixel values are in ImageNet normalized range', () {
+    test('pixel values are in Donut normalized range', () {
       for (final path in _imageFiles) {
         final bytes = File(path).readAsBytesSync();
         final tensor = DonutImageUtils.preprocessBytes(bytes, config);

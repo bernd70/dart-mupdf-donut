@@ -85,29 +85,47 @@ class DonutTokenizer {
 
     // Extract vocabulary
     final modelData = json['model'] as Map<String, dynamic>;
-    final vocabData = modelData['vocab'] as Map<String, dynamic>;
+    final vocabRaw = modelData['vocab'];
     final vocab = <String, int>{};
-    for (final entry in vocabData.entries) {
-      vocab[entry.key] = entry.value as int;
-    }
-
-    // Extract merges
-    final mergesData = modelData['merges'] as List<dynamic>;
     final merges = <(String, String)>[];
-    for (final merge in mergesData) {
-      final parts = (merge as String).split(' ');
-      if (parts.length == 2) {
-        merges.add((parts[0], parts[1]));
+
+    if (vocabRaw is Map<String, dynamic>) {
+      // BPE format: vocab is {token: id}
+      for (final entry in vocabRaw.entries) {
+        vocab[entry.key] = entry.value as int;
       }
+      // Extract merges (BPE only)
+      if (modelData.containsKey('merges')) {
+        final mergesData = modelData['merges'] as List<dynamic>;
+        for (final merge in mergesData) {
+          final parts = (merge as String).split(' ');
+          if (parts.length == 2) {
+            merges.add((parts[0], parts[1]));
+          }
+        }
+      }
+    } else if (vocabRaw is List<dynamic>) {
+      // Unigram format: vocab is [[token, score], ...]
+      for (int i = 0; i < vocabRaw.length; i++) {
+        final entry = vocabRaw[i] as List<dynamic>;
+        final token = entry[0] as String;
+        vocab[token] = i;
+      }
+    } else {
+      throw FormatException('Unexpected vocab format: ${vocabRaw.runtimeType}');
     }
 
-    // Extract special tokens
+    // Extract added tokens (may override/supplement vocab)
     final specialTokens = <String>{};
     if (json.containsKey('added_tokens')) {
       final addedTokens = json['added_tokens'] as List<dynamic>;
       for (final token in addedTokens) {
-        final content = (token as Map<String, dynamic>)['content'] as String;
+        final tokenMap = token as Map<String, dynamic>;
+        final content = tokenMap['content'] as String;
+        final id = tokenMap['id'] as int;
         specialTokens.add(content);
+        // Ensure added tokens have correct IDs
+        vocab[content] = id;
       }
     }
 

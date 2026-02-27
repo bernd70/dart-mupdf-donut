@@ -59,15 +59,15 @@ class DonutConfig {
   /// Path or name of pretrained model.
   final String nameOrPath;
 
-  /// ImageNet normalization mean.
-  static const List<double> imagenetMean = [0.485, 0.456, 0.406];
+  /// Donut normalization mean (matches HuggingFace DonutFeatureExtractor).
+  static const List<double> imageMean = [0.5, 0.5, 0.5];
 
-  /// ImageNet normalization std.
-  static const List<double> imagenetStd = [0.229, 0.224, 0.225];
+  /// Donut normalization std (matches HuggingFace DonutFeatureExtractor).
+  static const List<double> imageStd = [0.5, 0.5, 0.5];
 
   const DonutConfig({
     this.inputSize = const [2560, 1920],
-    this.alignLongAxis = false,
+    this.alignLongAxis = true,
     this.windowSize = 10,
     this.encoderLayer = const [2, 2, 14, 2],
     this.decoderLayer = 4,
@@ -79,7 +79,7 @@ class DonutConfig {
     this.decoderEmbedDim = 1024,
     this.decoderFfnDim = 4096,
     this.decoderNumHeads = 16,
-    this.vocabSize = 57522,
+    this.vocabSize = 57525,
     this.nameOrPath = '',
   });
 
@@ -121,7 +121,7 @@ class DonutConfig {
   factory DonutConfig.fromJson(Map<String, dynamic> json) {
     return DonutConfig(
       inputSize: (json['input_size'] as List?)?.cast<int>() ?? [2560, 1920],
-      alignLongAxis: json['align_long_axis'] as bool? ?? false,
+      alignLongAxis: json['align_long_axis'] as bool? ?? true,
       windowSize: json['window_size'] as int? ?? 10,
       encoderLayer:
           (json['encoder_layer'] as List?)?.cast<int>() ?? [2, 2, 14, 2],
@@ -135,7 +135,7 @@ class DonutConfig {
       decoderEmbedDim: json['decoder_embed_dim'] as int? ?? 1024,
       decoderFfnDim: json['decoder_ffn_dim'] as int? ?? 4096,
       decoderNumHeads: json['decoder_num_heads'] as int? ?? 16,
-      vocabSize: json['vocab_size'] as int? ?? 57522,
+      vocabSize: json['vocab_size'] as int? ?? 57525,
       nameOrPath: json['name_or_path'] as String? ?? '',
     );
   }
