@@ -5,7 +5,7 @@ description: >-
   page manipulation, PDF creation) with a Donut (Swin + BART) transformer
   for structured receipt, invoice, and form extraction from images.
   No native dependencies — works on all platforms.
-version: 1.1.0
+version: 0.1.2
 homepage: https://github.com/proethiopia/dart-mupdf-donut
 repository: https://github.com/proethiopia/dart-mupdf-donut
 issue_tracker: https://github.com/proethiopia/dart-mupdf-donut/issues
@@ -22,6 +22,7 @@ dependencies:
   collection: ^1.19.0
   path: ^1.9.0
   pointycastle: ^3.9.1
+  rxdart: ^0.28.0
 
 dev_dependencies:
   lints: ^5.1.0

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:image/image.dart' as img;
@@ -483,9 +484,8 @@ class Pixmap {
       format = 'pbm';
     }
 
-    toBytes(format);
-    // In a real implementation, write to file using dart:io
-    // File(filename).writeAsBytesSync(data);
+    final data = toBytes(format);
+    File(filename).writeAsBytesSync(data);
   }
 
   // ---------- Manipulation ----------
@@ -591,6 +591,83 @@ class Pixmap {
   void setDpi(int xDpi, int yDpi) {
     xRes = xDpi;
     yRes = yDpi;
+  }
+
+  /// Crop the pixmap to the given rectangle.
+  ///
+  /// Returns a new [Pixmap] containing only the pixels inside [rect].
+  Pixmap crop(IRect rect) {
+    final nr = rect.normalized;
+    final cx0 = nr.x0.clamp(0, width);
+    final cy0 = nr.y0.clamp(0, height);
+    final cx1 = nr.x1.clamp(0, width);
+    final cy1 = nr.y1.clamp(0, height);
+    final cw = cx1 - cx0;
+    final ch = cy1 - cy0;
+    if (cw <= 0 || ch <= 0) {
+      return Pixmap(colorspace: colorspace, width: 0, height: 0);
+    }
+    final samples = Uint8List(cw * ch * n);
+    for (var y = 0; y < ch; y++) {
+      final srcOff = ((cy0 + y) * width + cx0) * n;
+      final dstOff = y * cw * n;
+      samples.setRange(dstOff, dstOff + cw * n, _samples, srcOff);
+    }
+    return Pixmap(
+      colorspace: colorspace,
+      width: cw,
+      height: ch,
+      hasAlpha: hasAlpha,
+      xRes: xRes,
+      yRes: yRes,
+      samples: samples,
+    );
+  }
+
+  /// Scale the pixmap to [newWidth] × [newHeight] using bilinear interpolation.
+  ///
+  /// More accurate than [shrink] which only supports integer factors.
+  Pixmap scale(int newWidth, int newHeight) {
+    if (newWidth <= 0 || newHeight <= 0) {
+      return Pixmap(colorspace: colorspace, width: 0, height: 0);
+    }
+    final dst = Uint8List(newWidth * newHeight * n);
+    for (var dy = 0; dy < newHeight; dy++) {
+      for (var dx = 0; dx < newWidth; dx++) {
+        final sx = dx * (width - 1) / math.max(newWidth - 1, 1);
+        final sy = dy * (height - 1) / math.max(newHeight - 1, 1);
+        final x0 = sx.floor().clamp(0, width - 1);
+        final y0 = sy.floor().clamp(0, height - 1);
+        final x1 = (x0 + 1).clamp(0, width - 1);
+        final y1 = (y0 + 1).clamp(0, height - 1);
+        final fx = sx - x0;
+        final fy = sy - y0;
+
+        final off = (dy * newWidth + dx) * n;
+        for (var c = 0; c < n; c++) {
+          final v00 = _samples[(y0 * width + x0) * n + c];
+          final v10 = _samples[(y0 * width + x1) * n + c];
+          final v01 = _samples[(y1 * width + x0) * n + c];
+          final v11 = _samples[(y1 * width + x1) * n + c];
+          final v = (v00 * (1 - fx) * (1 - fy) +
+                  v10 * fx * (1 - fy) +
+                  v01 * (1 - fx) * fy +
+                  v11 * fx * fy)
+              .round()
+              .clamp(0, 255);
+          dst[off + c] = v;
+        }
+      }
+    }
+    return Pixmap(
+      colorspace: colorspace,
+      width: newWidth,
+      height: newHeight,
+      hasAlpha: hasAlpha,
+      xRes: xRes,
+      yRes: yRes,
+      samples: dst,
+    );
   }
 
   /// Set alpha channel values.

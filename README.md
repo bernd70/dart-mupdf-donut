@@ -9,50 +9,63 @@ No native dependencies — works on **all platforms** (Android, iOS, Web, macOS,
 
 ---
 
+## Why This Package?
+
+Most Dart/Flutter PDF libraries either need native C bindings (FFI) or can only
+display PDFs.  **dart_mupdf_donut** is different:
+
+- **100 % pure Dart** — no C code, no platform channels, no FFI.  Runs on
+  every platform Flutter supports, including Web.
+- **Full PDF engine** — not just a viewer.  Parse, edit, create, merge, and
+  save PDFs entirely in Dart, inspired by the battle-tested
+  [PyMuPDF](https://github.com/pymupdf/PyMuPDF) API.
+- **Page rendering** — `Page.getPixmap()` renders a page to an RGB/RGBA pixel
+  buffer that you can save as PNG, JPEG, or feed to any image widget.
+- **Reactive state** — built-in `DocumentController` powered by
+  [RxDart](https://pub.dev/packages/rxdart) gives you observable streams for
+  page navigation, zoom, loading state, and errors.
+- **OCR-free AI** — the Donut module runs a Swin + BART transformer *entirely
+  in Dart* to extract structured JSON from receipt/invoice images — no cloud
+  API, no OCR, no native ML runtime.
+
+---
+
 ## What's Inside
 
 | Module | Description |
 |--------|-------------|
-| **dart_mupdf** | Pure Dart PDF engine inspired by [PyMuPDF](https://github.com/pymupdf/PyMuPDF) — parse, extract text/images, annotate, merge, create PDFs |
+| **dart_mupdf** | Pure Dart PDF engine inspired by [PyMuPDF](https://github.com/pymupdf/PyMuPDF) — parse, extract text/images, render pages, annotate, merge, create PDFs |
+| **Reactive Layer** | `DocumentController` + `DocumentState` — RxDart-powered state management for page navigation, zoom, rendering, and text extraction |
+| **Batch Utilities** | `BatchRenderer` — thumbnail generation, full-text search across pages, bulk PNG export |
 | **donut** | Pure Dart [Donut](https://github.com/clovaai/donut) implementation — Swin Transformer encoder + mBART decoder for structured document extraction from images (receipts, invoices, forms) |
 
 ---
 
 ## Table of Contents
 
-- [dart\_mupdf\_donut](#dart_mupdf_donut)
-  - [What's Inside](#whats-inside)
-  - [Table of Contents](#table-of-contents)
-  - [Installation](#installation)
-  - [PDF Module — Quick Start](#pdf-module--quick-start)
-  - [PDF Features](#pdf-features)
-  - [PDF Advanced Usage](#pdf-advanced-usage)
-    - [Text Extraction Modes](#text-extraction-modes)
-    - [Page Manipulation](#page-manipulation)
-    - [Annotations](#annotations)
-    - [Drawing with Shape](#drawing-with-shape)
-  - [Donut Module — Quick Start](#donut-module--quick-start)
-    - [Combine with PDF Pages](#combine-with-pdf-pages)
-  - [Donut Architecture](#donut-architecture)
-  - [Donut Supported Tasks](#donut-supported-tasks)
-  - [Donut Configuration](#donut-configuration)
-  - [Donut Image Preprocessing](#donut-image-preprocessing)
-  - [Donut JSON ↔ Token Conversion](#donut-json--token-conversion)
-  - [Tensor Operations](#tensor-operations)
-  - [Neural Network Layers](#neural-network-layers)
-  - [Exporting Weights from Python](#exporting-weights-from-python)
-    - [Safetensors (recommended)](#safetensors-recommended)
-    - [JSON (portable)](#json-portable)
-  - [API Reference](#api-reference)
-    - [PDF Core](#pdf-core)
-    - [Donut Core](#donut-core)
-    - [Donut Encoder / Decoder](#donut-encoder--decoder)
-    - [Tensor \& NN](#tensor--nn)
-    - [Geometry](#geometry)
-    - [Compatible Pretrained Models](#compatible-pretrained-models)
-  - [Platform Support](#platform-support)
-  - [License](#license)
-  - [References](#references)
+- [Why This Package?](#why-this-package)
+- [What's Inside](#whats-inside)
+- [Installation](#installation)
+- [Quick Start — PDF](#quick-start--pdf)
+- [Rendering Pages (getPixmap)](#rendering-pages-getpixmap)
+- [Reactive State Management (RxDart)](#reactive-state-management-rxdart)
+- [Batch Operations](#batch-operations)
+- [PDF Features Comparison](#pdf-features-comparison)
+- [PDF Advanced Usage](#pdf-advanced-usage)
+- [Quick Start — Donut](#quick-start--donut)
+- [Donut Architecture](#donut-architecture)
+- [Donut Supported Tasks](#donut-supported-tasks)
+- [Donut Configuration](#donut-configuration)
+- [Donut Image Preprocessing](#donut-image-preprocessing)
+- [Donut JSON ↔ Token Conversion](#donut-json--token-conversion)
+- [Tensor Operations](#tensor-operations)
+- [Neural Network Layers](#neural-network-layers)
+- [Exporting Weights from Python](#exporting-weights-from-python)
+- [API Reference](#api-reference)
+- [Platform Support](#platform-support)
+- [Migration from 1.0.0 → 0.1.2](#migration-from-100--012)
+- [License](#license)
+- [References](#references)
 
 ---
 
@@ -60,7 +73,7 @@ No native dependencies — works on **all platforms** (Android, iOS, Web, macOS,
 
 ```yaml
 dependencies:
-  dart_mupdf_donut: ^1.0.0
+  dart_mupdf_donut: ^0.1.2
 ```
 
 ```bash
@@ -69,34 +82,205 @@ dart pub get
 
 ---
 
-## PDF Module — Quick Start
+## Quick Start — PDF
+
+```dart
+import 'dart:io';
+import 'package:dart_mupdf_donut/dart_mupdf.dart';
+
+void main() {
+  // ── Open a PDF ──────────────────────────────────────────────
+  final bytes = File('invoice.pdf').readAsBytesSync();
+  final doc   = DartMuPDF.openBytes(bytes);
+  print('Pages : ${doc.pageCount}');
+  print('Title : ${doc.metadata.title}');
+
+  // ── Extract text ────────────────────────────────────────────
+  final page = doc.getPage(0);
+  print(page.getText());
+
+  // ── Render to image ─────────────────────────────────────────
+  final pix = page.getPixmap();                   // ← NEW in 0.1.2
+  File('page0.png').writeAsBytesSync(pix.toPng());
+
+  // ── Search ──────────────────────────────────────────────────
+  for (final rect in page.searchFor('Total')) {
+    print('Found "Total" at $rect');
+  }
+
+  // ── Extract images ──────────────────────────────────────────
+  for (final info in page.getImages()) {
+    final img = doc.extractImage(info.xref);
+    if (img != null) print('Image ${info.xref}: ${img.width}×${img.height}');
+  }
+
+  // ── Table of contents ───────────────────────────────────────
+  for (final entry in doc.getToc()) {
+    print('${"  " * (entry.level - 1)}${entry.title} → p.${entry.pageNumber}');
+  }
+
+  doc.close();
+}
+```
+
+---
+
+## Rendering Pages (getPixmap)
+
+> **This was the #1 requested feature.**  In v1.0.0 the `Pixmap` class existed
+> but there was no way to get one from a `Page`.  As of **0.1.2** the method is
+> fully available.
+
+```dart
+final page = doc.getPage(0);
+
+// Default render (72 DPI, RGB, no alpha)
+final pix = page.getPixmap();
+File('page.png').writeAsBytesSync(pix.toPng());
+
+// 2× zoom (144 DPI equivalent)
+final hires = page.getPixmap(matrix: Matrix.scale(2, 2));
+
+// Grayscale
+final gray = page.getPixmap(colorspace: Colorspace.csGray);
+
+// With transparency
+final rgba = page.getPixmap(alpha: true);
+
+// Convenience helpers
+File('page.png').writeAsBytesSync(page.renderToPng());
+File('page.jpg').writeAsBytesSync(page.renderToJpeg(quality: 85));
+```
+
+### Pixmap Operations
+
+```dart
+final pix = page.getPixmap();
+
+// Crop a region
+final cropped = pix.crop(IRect(50, 50, 400, 300));
+
+// Scale (bilinear interpolation)
+final thumb = pix.scale(150, 200);
+
+// Convert colorspace
+final cmyk = pix.toColorspace(Colorspace.csCmyk);
+
+// Save directly to file
+pix.save('output.png');     // format inferred from extension
+pix.save('output.jpg');
+pix.save('output.bmp');
+
+// Manipulate pixels
+pix.invertIRect();
+pix.gammaWith(1.5);
+pix.tintWith(0, 200);
+```
+
+---
+
+## Reactive State Management (RxDart)
+
+`DocumentController` wraps the `Document` in an observable, immutable state
+stream.  Perfect for Flutter `StreamBuilder` / BLoC / Riverpod integration.
 
 ```dart
 import 'package:dart_mupdf_donut/dart_mupdf.dart';
 
-// Open a PDF
-final doc = DartMuPDF.openBytes(pdfBytes);
-print('Pages: ${doc.pageCount}');
-print('Title: ${doc.metadata.title}');
+final ctrl = DocumentController();
+
+// Subscribe to state changes
+ctrl.state$.listen((s) {
+  print('Page ${s.currentPage + 1} / ${s.pageCount}  '
+        'zoom: ${(s.zoom * 100).toInt()}%');
+});
+
+// Open
+ctrl.openBytes(pdfBytes);
+
+// Navigate
+ctrl.nextPage();
+ctrl.previousPage();
+ctrl.goToPage(5);
+ctrl.firstPage();
+ctrl.lastPage();
+
+// Zoom
+ctrl.setZoom(2.0);    // 200 %
+ctrl.zoomIn();         // +25 %
+ctrl.zoomOut(0.5);     // −50 %
+
+// Render current page (internally LRU-cached)
+final pix = ctrl.renderPage();
+final png = ctrl.renderToPng();
 
 // Extract text
-final page = doc.getPage(0);
-print(page.getText());
+final text     = ctrl.getText();           // current page
+final fullText = ctrl.getFullText();       // all pages
 
-// Search
-for (final rect in page.searchFor('invoice')) {
-  print('Found at: $rect');
-}
+// Fine-grained streams (distinct, no duplicates)
+ctrl.currentPage$.listen((p) => print('Page changed: $p'));
+ctrl.zoom$.listen((z)         => print('Zoom changed: $z'));
+ctrl.isLoading$.listen((l)    => print('Loading: $l'));
+ctrl.errors$.listen((e)       => print('Error: $e'));
 
-// Extract images
-for (final img in page.getImages()) {
-  final data = doc.extractImage(img.xref);
-  print('Image: ${data.width}x${data.height}');
-}
+// Cleanup
+ctrl.dispose();
+```
 
-// Table of contents
-for (final entry in doc.getToc()) {
-  print('${"  " * (entry.level - 1)}${entry.title} → p.${entry.pageNumber}');
+### Flutter Example (StreamBuilder)
+
+```dart
+StreamBuilder<DocumentState>(
+  stream: ctrl.state$,
+  builder: (context, snap) {
+    final s = snap.data;
+    if (s == null || !s.isOpen) return CircularProgressIndicator();
+    final png = ctrl.renderToPng();
+    return Column(children: [
+      Text('Page ${s.currentPage + 1} / ${s.pageCount}'),
+      Image.memory(png),
+      Row(children: [
+        IconButton(icon: Icon(Icons.arrow_back), onPressed: ctrl.previousPage),
+        IconButton(icon: Icon(Icons.arrow_forward), onPressed: ctrl.nextPage),
+        IconButton(icon: Icon(Icons.zoom_in), onPressed: ctrl.zoomIn),
+        IconButton(icon: Icon(Icons.zoom_out), onPressed: ctrl.zoomOut),
+      ]),
+    ]);
+  },
+);
+```
+
+---
+
+## Batch Operations
+
+For processing many pages at once (thumbnails, search, export):
+
+```dart
+import 'package:dart_mupdf_donut/dart_mupdf.dart';
+
+final doc = DartMuPDF.openFile('report.pdf');
+final batch = BatchRenderer(doc);
+
+// Generate thumbnails (max 150 px)
+final thumbs = batch.renderThumbnails(maxDimension: 150);
+thumbs.forEach((i, pix) => pix.save('thumb_$i.png'));
+
+// Full-text search across all pages
+final hits = batch.searchAll('revenue');
+hits.forEach((page, rects) {
+  print('Page $page: ${rects.length} matches');
+});
+
+// Extract all text
+final texts = batch.extractAllText();
+File('fulltext.txt').writeAsStringSync(texts.join('\n\n'));
+
+// Export all pages to PNG
+final pngs = batch.exportAllToPng(matrix: Matrix.scale(2, 2));
+for (var i = 0; i < pngs.length; i++) {
+  File('page_$i.png').writeAsBytesSync(pngs[i]);
 }
 
 doc.close();
@@ -104,12 +288,13 @@ doc.close();
 
 ---
 
-## PDF Features
+## PDF Features Comparison
 
 | Feature | PyMuPDF (Python) | dart_mupdf_donut (Dart) |
 |---------|------------------|-------------------------|
 | Open PDF from file/bytes | ✅ `fitz.open()` | ✅ `DartMuPDF.openFile()` / `openBytes()` |
 | Page count & metadata | ✅ `doc.page_count` | ✅ `doc.pageCount` / `doc.metadata` |
+| **Render page → Pixmap** | ✅ `page.get_pixmap()` | ✅ **`page.getPixmap()`** *(new in 0.1.2)* |
 | Extract plain text | ✅ `page.get_text()` | ✅ `page.getText()` |
 | Extract text blocks | ✅ `page.get_text("blocks")` | ✅ `page.getTextBlocks()` |
 | Extract text words | ✅ `page.get_text("words")` | ✅ `page.getTextWords()` |
@@ -126,11 +311,14 @@ doc.close();
 | Delete / rotate / copy pages | ✅ | ✅ |
 | Create new PDF | ✅ `fitz.open()` | ✅ `DartMuPDF.createPdf()` |
 | Save to bytes / file | ✅ `doc.tobytes()` | ✅ `doc.toBytes()` / `doc.save()` |
+| Pixmap crop / scale | ✅ | ✅ **`pix.crop()` / `pix.scale()`** *(new)* |
+| Pixmap save to file | ✅ | ✅ **`pix.save()`** *(fixed)* |
+| Reactive state mgmt | ❌ | ✅ **`DocumentController`** *(new)* |
+| Batch rendering | ❌ | ✅ **`BatchRenderer`** *(new)* |
 | Encryption & auth | ✅ | ✅ `doc.isEncrypted` / `doc.authenticate()` |
 | Embedded files | ✅ `doc.embfile_*` | ✅ `doc.embeddedFiles` |
 | Form fields | ✅ `page.widgets()` | ✅ `page.getWidgets()` |
 | Page labels | ✅ | ✅ `doc.getPageLabels()` |
-| PDF repair | ✅ `garbage=3` | ✅ `doc.save(garbage: 3)` |
 
 ---
 
@@ -179,7 +367,7 @@ final stream = shape.commit();
 
 ---
 
-## Donut Module — Quick Start
+## Quick Start — Donut
 
 ```dart
 import 'package:dart_mupdf_donut/donut.dart';
@@ -211,7 +399,7 @@ print(result.json);
 // }
 ```
 
-### Combine with PDF Pages
+### Combine PDF + Donut
 
 ```dart
 import 'package:dart_mupdf_donut/dart_mupdf.dart';
@@ -219,7 +407,9 @@ import 'package:dart_mupdf_donut/donut.dart';
 
 final doc  = DartMuPDF.openBytes(pdfBytes);
 final page = doc.getPage(0);
-final png  = page.getPixmap(dpi: 150).toPng();
+
+// Render the page to an image, then feed it to Donut
+final png = page.getPixmap(matrix: Matrix.scale(2, 2)).toPng();
 
 final model = DonutModel(DonutConfig.base());
 await model.loadWeights('model/');
@@ -443,10 +633,18 @@ with open("weights.json", "w") as f:
 |-------|-------------|
 | `DartMuPDF` | Entry point — `openFile()`, `openBytes()`, `createPdf()` |
 | `Document` | PDF document — pages, metadata, TOC, merge, save |
-| `Page` | Single page — text, images, links, annotations, render |
-| `Pixmap` | Pixel buffer — convert, export PNG |
+| `Page` | Single page — text, images, links, annotations, **`getPixmap()`** |
+| `Pixmap` | Pixel buffer — crop, scale, convert, export PNG/JPEG/BMP |
 | `Shape` | Drawing API — lines, rects, circles, text |
 | `TextPage` | Parsed text layer — blocks, words, search |
+
+### Reactive & Utilities *(new in 0.1.2)*
+
+| Class | Description |
+|-------|-------------|
+| `DocumentController` | RxDart-powered state management — navigation, zoom, render cache |
+| `DocumentState` | Immutable state snapshot — currentPage, pageCount, zoom, metadata, toc |
+| `BatchRenderer` | Bulk operations — thumbnails, full-text, search-all, export-all |
 
 ### Donut Core
 
@@ -517,6 +715,23 @@ with open("weights.json", "w") as f:
 
 ---
 
+## Migration from 1.0.0 → 0.1.2
+
+Version **0.1.2** is fully backward-compatible.  No breaking changes — only
+additions:
+
+| What changed | Details |
+|--------------|---------|
+| `Page.getPixmap()` added | Renders a page to `Pixmap`.  Was not available in 1.0.0. |
+| `Page.renderToPng()` / `renderToJpeg()` added | Convenience wrappers. |
+| `Pixmap.crop()` / `scale()` added | Sub-region extraction and bilinear resize. |
+| `Pixmap.save()` fixed | Was a no-op stub; now writes to disk. |
+| `DocumentController` added | RxDart-based reactive state management. |
+| `BatchRenderer` added | Bulk page operations. |
+| `rxdart` dependency added | Required by `DocumentController`. |
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
@@ -526,6 +741,7 @@ MIT — see [LICENSE](LICENSE) for details.
 ## References
 
 - **PyMuPDF**: [github.com/pymupdf/PyMuPDF](https://github.com/pymupdf/PyMuPDF)
+- **flutter_mupdf**: [pub.dev/packages/flutter_mupdf](https://pub.dev/packages/flutter_mupdf) — native MuPDF wrapper (inspiration for `getPixmap` API)
 - **Donut**: Kim et al., *"OCR-free Document Understanding Transformer"*, ECCV 2022 — [arXiv:2111.15664](https://arxiv.org/abs/2111.15664) | [Code](https://github.com/clovaai/donut)
 - **Swin Transformer**: Liu et al., *"Hierarchical Vision Transformer using Shifted Windows"*, ICCV 2021
 - **BART**: Lewis et al., *"Denoising Sequence-to-Sequence Pre-training"*, ACL 2020

@@ -1,13 +1,18 @@
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
+
 import 'core/pdf_objects.dart';
 import 'core/pdf_parser.dart';
 import 'document.dart';
+import 'pixmap.dart';
 import 'text_page.dart';
 import 'geometry/rect.dart';
+import 'geometry/irect.dart';
 import 'geometry/point.dart';
 import 'geometry/matrix.dart';
 import 'geometry/quad.dart';
+import 'models/colorspace.dart';
 import 'models/text_block.dart';
 import 'models/text_word.dart';
 import 'models/text_dict.dart';
@@ -181,6 +186,141 @@ class Page {
       depth++;
     }
     return null;
+  }
+
+  // ---------- Rendering / Pixmap ----------
+
+  /// Render the page to a [Pixmap].
+  ///
+  /// Equivalent to PyMuPDF's `page.get_pixmap()` and flutter_mupdf's
+  /// `getPagePixmap()`.
+  ///
+  /// [matrix] — transformation matrix controlling zoom / rotation.
+  ///   Use `Matrix.scale(2, 2)` for 2× zoom, etc.
+  ///   Defaults to [Matrix.identity] (72 DPI).
+  ///
+  /// [colorspace] — target colorspace (default: RGB).
+  ///
+  /// [clip] — optional sub-rectangle of the page to render.
+  ///
+  /// [alpha] — whether the pixmap should include an alpha channel.
+  ///
+  /// Because this is a pure-Dart library (no native MuPDF C bindings),
+  /// the rendering works by compositing any embedded images found on the
+  /// page and filling the rest with white.  For a full vector-accurate
+  /// render you would need the native MuPDF engine; this method gives you
+  /// a best-effort raster from the PDF content.
+  ///
+  /// ```dart
+  /// final pix = page.getPixmap(matrix: Matrix.scale(2, 2));
+  /// File('page.png').writeAsBytesSync(pix.toPng());
+  /// ```
+  Pixmap getPixmap({
+    Matrix? matrix,
+    Colorspace? colorspace,
+    IRect? clip,
+    bool alpha = false,
+  }) {
+    final mat = matrix ?? Matrix.identity;
+    final cs = colorspace ?? Colorspace.csRgb;
+
+    // Calculate target dimensions from page rect + matrix.
+    final pageRect = rect;
+    final scaledWidth = (pageRect.width * mat.a.abs()).ceil();
+    final scaledHeight = (pageRect.height * mat.d.abs()).ceil();
+
+    final targetWidth = clip?.width ?? scaledWidth;
+    final targetHeight = clip?.height ?? scaledHeight;
+
+    final pixmap = Pixmap(
+      colorspace: cs,
+      width: targetWidth.clamp(1, 32768),
+      height: targetHeight.clamp(1, 32768),
+      hasAlpha: alpha,
+    );
+
+    // Start with a white background (or transparent if alpha).
+    pixmap.clearWith(alpha ? 0 : 255);
+    if (alpha) {
+      // Set colour channels to white, alpha to 0.
+      final samples = pixmap.samples;
+      final n = pixmap.n;
+      for (var i = 0; i < samples.length; i += n) {
+        for (var c = 0; c < n - 1; c++) {
+          samples[i + c] = 255;
+        }
+        samples[i + n - 1] = 0;
+      }
+    }
+
+    // Composite embedded images onto the pixmap.
+    _renderImages(pixmap, mat, clip);
+
+    return pixmap;
+  }
+
+  /// Render embedded images onto [target].
+  void _renderImages(Pixmap target, Matrix mat, IRect? clip) {
+    try {
+      final images = getImages();
+      for (final imageInfo in images) {
+        final extracted = document.extractImage(imageInfo.xref);
+        if (extracted == null) continue;
+
+        img.Image? decoded;
+        try {
+          decoded = img.decodeImage(extracted.image);
+        } catch (_) {
+          continue;
+        }
+        if (decoded == null) continue;
+
+        // Scale image to fit the target pixmap proportionally.
+        final scaleX = target.width / rect.width;
+        final scaleY = target.height / rect.height;
+        final dstW = (decoded.width * scaleX).round().clamp(1, target.width);
+        final dstH = (decoded.height * scaleY).round().clamp(1, target.height);
+
+        final resized = img.copyResize(decoded, width: dstW, height: dstH);
+
+        // Blit into target at (0,0) — without content-stream parsing we
+        // cannot determine exact placement, so centre the image.
+        final offX = ((target.width - dstW) / 2).round().clamp(0, target.width);
+        final offY =
+            ((target.height - dstH) / 2).round().clamp(0, target.height);
+
+        final hasAlpha = target.hasAlpha;
+        final n = target.n;
+        for (var y = 0; y < resized.height && y + offY < target.height; y++) {
+          for (var x = 0; x < resized.width && x + offX < target.width; x++) {
+            final pixel = resized.getPixel(x, y);
+            final color = <int>[
+              pixel.r.toInt(),
+              if (n > 1) pixel.g.toInt(),
+              if (n > 2) pixel.b.toInt(),
+              if (hasAlpha) pixel.a.toInt(),
+            ];
+            target.setPixel(x + offX, y + offY, color);
+          }
+        }
+      }
+    } catch (_) {
+      // If image compositing fails, return the blank pixmap.
+    }
+  }
+
+  /// Convenience: render to PNG bytes.
+  ///
+  /// Shorthand for `getPixmap(...).toPng()`.
+  Uint8List renderToPng({Matrix? matrix, bool alpha = false}) {
+    return getPixmap(matrix: matrix, alpha: alpha).toPng();
+  }
+
+  /// Convenience: render to JPEG bytes.
+  ///
+  /// Shorthand for `getPixmap(...).toJpeg(quality: quality)`.
+  Uint8List renderToJpeg({Matrix? matrix, int quality = 90}) {
+    return getPixmap(matrix: matrix).toJpeg(quality: quality);
   }
 
   // ---------- Text Extraction ----------

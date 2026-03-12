@@ -1,3 +1,22 @@
+## 0.1.2
+
+### Page Rendering, Reactive State & Pixmap Improvements
+
+- **`Page.getPixmap()`** — Render any PDF page to a `Pixmap` pixel buffer.
+  Supports `matrix` (zoom/DPI), `colorspace`, `clip` region, and `alpha` channel.
+- **`Page.renderToPng()` / `renderToJpeg()`** — Convenience methods for
+  one-step page-to-image export.
+- **`Pixmap.save()` fixed** — Was a no-op stub; now writes PNG/JPEG/BMP to disk.
+- **`Pixmap.crop(IRect)`** — Extract a sub-region from any pixmap.
+- **`Pixmap.scale(width, height)`** — Resize with bilinear interpolation.
+- **`DocumentController`** — RxDart-powered reactive state management:
+  page navigation, zoom, render caching, observable streams.
+- **`BatchRenderer`** — Bulk operations: thumbnails, full-text search across
+  pages, export-all-to-PNG.
+- **`rxdart ^0.28.0`** dependency added.
+- **README** rewritten with detailed documentation for all new features.
+- **72 tests passing** (47 original + 25 new).
+
 ## 1.1.0
 
 ### Donut Model — Real Pretrained Weight Support

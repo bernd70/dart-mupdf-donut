@@ -10,8 +10,21 @@
 ///
 /// final doc = DartMuPDF.openBytes(pdfBytes);
 /// print('Pages: ${doc.pageCount}');
+///
+/// // Extract text
 /// final text = doc.getPage(0).getText();
 /// print(text);
+///
+/// // Render page to pixmap (NEW)
+/// final pix = doc.getPage(0).getPixmap();
+/// File('page.png').writeAsBytesSync(pix.toPng());
+///
+/// // Reactive controller (NEW — requires rxdart)
+/// final ctrl = DocumentController();
+/// ctrl.openBytes(pdfBytes);
+/// ctrl.state$.listen((s) => print('Page ${s.currentPage}'));
+/// ctrl.dispose();
+///
 /// doc.close();
 /// ```
 library dart_mupdf;
@@ -52,6 +65,12 @@ export 'src/page.dart';
 export 'src/text_page.dart';
 export 'src/pixmap.dart';
 export 'src/shape.dart';
+
+// Reactive state management (RxDart)
+export 'src/reactive/document_controller.dart';
+
+// Utilities
+export 'src/utils/batch_renderer.dart';
 
 // Entry point
 export 'src/dart_mupdf_base.dart';
